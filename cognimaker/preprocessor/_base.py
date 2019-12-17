@@ -2,19 +2,19 @@ import pickle
 import boto3
 import pandas as pd
 import numpy as np
-import pyspark.sql.dataframe
 
 from io import StringIO
+from abc import ABC, abstractmethod
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.model_selection import KFold
 
 
-class BasePreprocessor(object):
+class BasePreprocessor(ABC):
 
     @staticmethod
-    def parse_s3_file_path(s3_file_path):
+    def _parse_s3_file_path(s3_file_path):
         """
         S3ファイルパスS3バケット名とS3キーパスを取得
         :param s3_path:
@@ -24,19 +24,23 @@ class BasePreprocessor(object):
         key = s3_file_path.split(f's3://{bucket}/')[1]
         return bucket, key
 
-    def __init__(self, input_path: str, output_path: str, pickle_path: str, purpose: str = 'train', load_pickle_path: str = None):
+    def __init__(
+        self, input_path: str, output_path: str, pickle_path: str,
+        purpose: str = 'train', load_pickle_path: str = None
+    ):
         """
         param
             input_path: 前処理前の入力ファイルのパス
             input_path: 前処理完了後の出力ファイルのパス
             pickle_path: pickleを保存（又はロード）するパス
             purpose: 前処理の目的（train, predict, fine_tune）を選択
+            load_pickle_path: 訓練時のオブジェクトを保存したpickleファイルのパス
         """
         if purpose not in ["train", "predict", "fine_tune"]:
             raise ValueError('invalid purpose')
 
         if purpose in ["predict", "fine_tune"]:
-            bucket, key = BasePreprocessor.parse_s3_file_path(load_pickle_path)
+            bucket, key = BasePreprocessor._parse_s3_file_path(load_pickle_path)
             s3 = boto3.resource('s3')
             response = s3.Object(bucket, key).get()
             obj = pickle.loads(response['Body'].read())
@@ -53,12 +57,12 @@ class BasePreprocessor(object):
         self.output_path = output_path
         self.pickle_path = pickle_path
 
-    def to_pickle(self):
-        bucket, key = BasePreprocessor.parse_s3_file_path(self.pickle_path)
+    def _to_pickle(self):
+        bucket, key = BasePreprocessor._parse_s3_file_path(self.pickle_path)
         s3 = boto3.resource('s3')
         s3.Object(bucket, key).put(Body=pickle.dumps(self))
 
-    def load_data(self):
+    def _load_data(self):
         """
         CSVファイルをspark data frameに読み込むメソッド
         param
@@ -75,6 +79,7 @@ class BasePreprocessor(object):
 
         return spark_data_frame, spark_context, sql_context
 
+    @abstractmethod
     def transform(self, spark_df, sql_context) -> pd.DataFrame:
         """
         モデル固有の前処理を実装するメソッド
@@ -84,9 +89,9 @@ class BasePreprocessor(object):
         return
             df: 前処理が完了した後のpandas DataFrame
         """
-        raise NotImplementedError()
+        pass
 
-    def output(self, pandas_df):
+    def _output(self, pandas_df):
         """
         前処理が完了したDataFrameをS3に出力するメソッド
         param
@@ -107,17 +112,17 @@ class BasePreprocessor(object):
         このクラスを継承したクラスで、transformメソッドを実装する必要がある
         """
         # データ読み込み
-        spark_df, spark_context, sql_context = self.load_data()
+        spark_df, spark_context, sql_context = self._load_data()
         # 前処理
         pandas_df = self.transform(spark_df, sql_context)
         # 出力
-        self.output(pandas_df)
+        self._output(pandas_df)
         # インスタンスを保存
-        self.to_pickle()
+        self._to_pickle()
         # spoark sessionの終了
         spark_context.stop()
 
-    def to_one_hot(self, df, column) -> pd.DataFrame:
+    def one_hot_encoding(self, df, column) -> pd.DataFrame:
         """
         指定したカラムをOneHotEncodingするメソッド
         param
@@ -155,7 +160,7 @@ class BasePreprocessor(object):
 
         return df
 
-    def to_label(self, df, column) -> pd.DataFrame:
+    def label_encoding(self, df, column) -> pd.DataFrame:
         """
         指定したカラムに対して、LabelEncodingを行うメソッド
         param

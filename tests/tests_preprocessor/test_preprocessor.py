@@ -42,10 +42,10 @@ class Preprocessor(BasePreprocessor):
         """.format(','.join(query_columns))).toPandas()
 
         if '性別' in columns:
-            df = self.to_label(df, 'sex')
+            df = self.label_encoding(df, 'sex')
 
         if '年代' in columns:
-            df = self.to_one_hot(df, 'age_class')
+            df = self.one_hot_encoding(df, 'age_class')
 
         return df
 
