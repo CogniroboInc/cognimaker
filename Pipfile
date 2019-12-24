@@ -6,12 +6,17 @@ verify_ssl = true
 [dev-packages]
 cognimaker = {editable = true,path = "."}
 pytest = "*"
+pytest-spark = "*"
 twine = "*"
 sphinx = "*"
 pyyaml = "*"
 flake8 = "*"
 
 [packages]
+boto3 = "*"
+numpy = "*"
+pandas = "*"
+pyspark = "*"
 scikit-learn = "*"
 
 [requires]
