@@ -157,6 +157,7 @@ class BasePreprocessor(ABC):
             dtype=int
         )
         df = pd.concat([df, one_hot_df], axis=1)
+        self.output_columns.extend(names)
 
         return df
 
@@ -180,6 +181,7 @@ class BasePreprocessor(ABC):
             le = self.encoder_dict[encode_column_name]['label_encoder']
             df[encode_column_name] = le.transform(df[column])
 
+        self.output_columns.append(encode_column_name)
         return df
 
     def frequency_encoding(self, df, column) -> pd.DataFrame:
@@ -202,6 +204,7 @@ class BasePreprocessor(ABC):
 
         df[encode_column_name] = df[column].map(freq)
 
+        self.output_columns.append(encode_column_name)
         return df
 
     def target_encoding(
@@ -251,4 +254,5 @@ class BasePreprocessor(ABC):
             target_mean = self.encoder_dict[encode_column_name]['target_mean']
             df[encode_column_name] = df[column].map(target_mean)
 
+        self.output_columns.append(encode_column_name)
         return df
