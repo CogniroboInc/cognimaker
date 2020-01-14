@@ -1,5 +1,6 @@
 import unittest
 import pandas as pd
+import os
 
 from cognimaker.preprocessor import BasePreprocessor
 
@@ -116,6 +117,27 @@ class PreprocessorTestCase(unittest.TestCase):
             pickle_path="s3://cognimaker-test/pickle/predict_preprocessor.pickle",
             purpose="predict",
             load_pickle_path="s3://cognimaker-test/pickle/train_preprocessor.pickle"
+        )
+
+        preprocessor.preprocess()
+
+    def test_2_transform_train_local(self):
+        preprocessor = Preprocessor(
+            input_path=os.path.dirname(os.path.abspath(__file__)) + "/test_input.csv",
+            output_path=os.path.dirname(os.path.abspath(__file__)) + "/test_output.csv",
+            pickle_path=os.path.dirname(os.path.abspath(__file__)) + "/train_preprocessor.pickle",
+            purpose="train"
+        )
+
+        preprocessor.preprocess()
+
+    def test_3_transform_predict_local(self):
+        preprocessor = Preprocessor(
+            input_path=os.path.dirname(os.path.abspath(__file__)) + "/test_input_drop.csv",
+            output_path=os.path.dirname(os.path.abspath(__file__)) + "/test_output_drop.csv",
+            pickle_path=os.path.dirname(os.path.abspath(__file__)) + "/predict_preprocessor.pickle",
+            purpose="predict",
+            load_pickle_path=os.path.dirname(os.path.abspath(__file__)) + "/train_preprocessor.pickle"
         )
 
         preprocessor.preprocess()

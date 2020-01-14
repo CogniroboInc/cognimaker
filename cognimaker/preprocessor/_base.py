@@ -14,6 +14,10 @@ from sklearn.model_selection import KFold
 class BasePreprocessor(ABC):
 
     @staticmethod
+    def _is_s3_path(path: str):
+        return path.startswith('s3://')
+
+    @staticmethod
     def _parse_s3_file_path(s3_file_path):
         """
         S3ファイルパスS3バケット名とS3キーパスを取得
@@ -40,11 +44,16 @@ class BasePreprocessor(ABC):
             raise ValueError('invalid purpose')
 
         if purpose in ["predict", "fine_tune"]:
-            bucket, key = BasePreprocessor._parse_s3_file_path(load_pickle_path)
-            s3 = boto3.resource('s3')
-            response = s3.Object(bucket, key).get()
-            obj = pickle.loads(response['Body'].read())
-            self.encoder_dict = obj.encoder_dict
+            if BasePreprocessor._is_s3_path(load_pickle_path):
+                bucket, key = BasePreprocessor._parse_s3_file_path(load_pickle_path)
+                s3 = boto3.resource('s3')
+                response = s3.Object(bucket, key).get()
+                obj = pickle.loads(response['Body'].read())
+                self.encoder_dict = obj.encoder_dict
+            else:
+                with open(load_pickle_path, mode='rb') as f:
+                    obj = pickle.load(f)
+                    self.encoder_dict = obj.encoder_dict
 
         else:
             # カラムとエンコーダーの対応関係を管理するdict
@@ -58,9 +67,13 @@ class BasePreprocessor(ABC):
         self.pickle_path = pickle_path
 
     def _to_pickle(self):
-        bucket, key = BasePreprocessor._parse_s3_file_path(self.pickle_path)
-        s3 = boto3.resource('s3')
-        s3.Object(bucket, key).put(Body=pickle.dumps(self))
+        if BasePreprocessor._is_s3_path(self.pickle_path):
+            bucket, key = BasePreprocessor._parse_s3_file_path(self.pickle_path)
+            s3 = boto3.resource('s3')
+            s3.Object(bucket, key).put(Body=pickle.dumps(self))
+        else:
+            with open(self.pickle_path, mode='wb') as f:
+                pickle.dump(self, f)
 
     def _load_data(self):
         """
@@ -97,12 +110,14 @@ class BasePreprocessor(ABC):
         param
             pandas_df: 出力するpandas DataFrame
         """
-        buffer = StringIO()
-        pandas_df[self.output_columns].to_csv(buffer, index=False, header=False)
-        output_bucket = self.output_path.split('//')[1].split('/')[0]
-        output_key = self.output_path.split(f's3://{output_bucket}/')[1]
-        s3 = boto3.resource('s3')
-        s3.Object(output_bucket, output_key).put(Body=buffer.getvalue())
+        if BasePreprocessor._is_s3_path(self.output_path):
+            buffer = StringIO()
+            pandas_df[self.output_columns].to_csv(buffer, index=False, header=False)
+            output_bucket, output_key = BasePreprocessor._parse_s3_file_path(self.output_path)
+            s3 = boto3.resource('s3')
+            s3.Object(output_bucket, output_key).put(Body=buffer.getvalue())
+        else:
+            pandas_df.to_csv(self.output_path, index=False, header=False)
 
     def preprocess(self):
         """
