@@ -1,8 +1,10 @@
+import os
 import pickle
 import boto3
 import pandas as pd
 import numpy as np
 
+from logging import getLogger, StreamHandler, Formatter, INFO
 from io import StringIO
 from abc import ABC, abstractmethod
 from pyspark import SparkContext
@@ -40,6 +42,9 @@ class BasePreprocessor(ABC):
             purpose: 前処理の目的（train, predict, fine_tune）を選択
             load_pickle_path: 訓練時のオブジェクトを保存したpickleファイルのパス
         """
+        self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
+        self.logger = self._get_logger()
+
         if purpose not in ["train", "predict", "fine_tune"]:
             raise ValueError('invalid purpose')
 
@@ -65,6 +70,33 @@ class BasePreprocessor(ABC):
         self.input_path = input_path
         self.output_path = output_path
         self.pickle_path = pickle_path
+
+    def _get_logger(self):
+        format = "%(asctime)s %(filename)s %(funcName)s [%(levelname)s] %(process_id)s %(message)s"
+        date_format = "%Y-%m-%dT%H:%M:%S%z"
+        logger = getLogger(__name__)
+        logger.setLevel(INFO)
+        _handler = StreamHandler()
+        _formatter = Formatter(format, date_format)
+        _handler.setFormatter(_formatter)
+        logger.addHandler(_handler)
+
+        return logger
+
+    def log(self, level='info', message: str = None):
+
+        extra = {"process_id": self.process_id}
+
+        if level == 'debug':
+            self.logger.debug(message, extra=extra)
+        elif level == 'info':
+            self.logger.info(message, extra=extra)
+        elif level == 'warning':
+            self.logger.warning(message, exc_info=True, extra=extra)
+        elif level == 'error':
+            self.logger.error(message, exc_info=True, extra=extra)
+        elif level == 'critical':
+            self.logger.critical(message, exc_info=True, extra=extra)
 
     def _to_pickle(self):
         if BasePreprocessor._is_s3_path(self.pickle_path):
@@ -126,16 +158,26 @@ class BasePreprocessor(ABC):
         の一連の流れを行う
         このクラスを継承したクラスで、transformメソッドを実装する必要がある
         """
-        # データ読み込み
-        spark_df, spark_context, sql_context = self._load_data()
-        # 前処理
-        pandas_df = self.transform(spark_df, sql_context)
-        # 出力
-        self._output(pandas_df)
-        # インスタンスを保存
-        self._to_pickle()
-        # spoark sessionの終了
-        spark_context.stop()
+        try:
+            self.log('info', "start preprocess")
+            # データ読み込み
+            spark_df, spark_context, sql_context = self._load_data()
+            self.log('info', "complete load data")
+            # 前処理
+            pandas_df = self.transform(spark_df, sql_context)
+            self.log('info', "complete transform")
+            # 出力
+            self._output(pandas_df)
+            self.log('info', "complete output")
+            # インスタンスを保存
+            self._to_pickle()
+            self.log('info', "complete save instance")
+            # spoark sessionの終了
+            spark_context.stop()
+            self.log('info', "complete preprocess")
+        except Exception as e:
+            self.log('error', "preprocess error")
+            raise e
 
     def one_hot_encoding(self, df, column) -> pd.DataFrame:
         """

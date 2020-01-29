@@ -1,6 +1,8 @@
 import os
+import json
 import pandas as pd
 
+from logging import getLogger, StreamHandler, Formatter, INFO
 from abc import ABC, abstractmethod
 
 
@@ -18,6 +20,41 @@ class BaseEstimator(ABC):
         self.param_path = param_path
         self.save_model_dir = save_model_dir
         self.pretrain_model_dir = pretrain_model_dir
+        self.process_id = self._get_process_id()
+        self.logger = self._get_logger()
+
+    def _get_process_id(self):
+        with open(self.param_path, 'r') as tc:
+            params = json.load(tc)
+        process_id = params.get('process_id', 'xxxxxxxx')
+        return process_id
+
+    def _get_logger(self):
+        format = "%(asctime)s %(filename)s %(funcName)s [%(levelname)s] %(process_id)s %(message)s"
+        date_format = "%Y-%m-%dT%H:%M:%S%z"
+        logger = getLogger(__name__)
+        logger.setLevel(INFO)
+        _handler = StreamHandler()
+        _formatter = Formatter(format, date_format)
+        _handler.setFormatter(_formatter)
+        logger.addHandler(_handler)
+
+        return logger
+
+    def log(self, level='info', message: str = None):
+
+        extra = {"process_id": self.process_id}
+
+        if level == 'debug':
+            self.logger.debug(message, extra=extra)
+        elif level == 'info':
+            self.logger.info(message, extra=extra)
+        elif level == 'warning':
+            self.logger.warning(message, exc_info=True, extra=extra)
+        elif level == 'error':
+            self.logger.error(message, exc_info=True, extra=extra)
+        elif level == 'critical':
+            self.logger.critical(message, exc_info=True, extra=extra)
 
     def train(self) -> None:
         """
@@ -25,11 +62,17 @@ class BaseEstimator(ABC):
         パラメータの取得→学習データの読み込み→学習→モデルの保存
         の一連の流れを行う
         """
-        params = self.get_params()
-        print(params)
-        X, y = self.get_data()
-        model = self.fit(X, y, params)
-        self.save_model(model)
+        try:
+            self.log('info', "start training")
+            params = self.get_params()
+            self.log('info', json.dumps(params))
+            X, y = self.get_data()
+            model = self.fit(X, y, params)
+            self.save_model(model)
+            self.log('info', "complete training")
+        except Exception as e:
+            self.log('error', "training error")
+            raise e
 
     @abstractmethod
     def get_params(self) -> dict:

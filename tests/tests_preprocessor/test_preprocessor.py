@@ -142,6 +142,16 @@ class PreprocessorTestCase(unittest.TestCase):
 
         preprocessor.preprocess()
 
+    def test_4_transform_train_local_error(self):
+        preprocessor = Preprocessor(
+            input_path=os.path.dirname(os.path.abspath(__file__)) + "/not_exist.csv",
+            output_path=os.path.dirname(os.path.abspath(__file__)) + "/test_output_error.csv",
+            pickle_path=os.path.dirname(os.path.abspath(__file__)) + "/train_error.pickle",
+            purpose="train",
+        )
+
+        preprocessor.preprocess()
+
 
 if __name__ == '__main__':
     unittest.main(exit=False)

@@ -29,8 +29,7 @@ class Estimator(BaseEstimator):
         with open(os.path.join(self.save_model_dir, 'model.pkl'), mode='wb') as f:
             pickle.dump(model, f)
 
-    @staticmethod
-    def log_model_score(model, X, y, score_type='train'):
+    def log_model_score(self, model, X, y, score_type='train'):
         predict_proba = model.predict(X)
         prediction = np.round(predict_proba)
 
@@ -40,23 +39,24 @@ class Estimator(BaseEstimator):
         auc = roc_auc_score(y, predict_proba)
         f1 = f1_score(y, prediction)
 
-        print(score_type + "_accuracy={:.4f};".format(accuracy))
-        print(score_type + "_precision={:.4f};".format(precision))
-        print(score_type + "_recall={:.4f};".format(recall))
-        print(score_type + "_auc={:.4f};".format(auc))
-        print(score_type + "_f1={:.4f};".format(f1))
+        self.log(level='info', message=score_type + "_accuracy={:.4f};".format(accuracy))
+        self.log(level='info', message=score_type + "_precision={:.4f};".format(precision))
+        self.log(level='info', message=score_type + "_recall={:.4f};".format(recall))
+        self.log(level='info', message=score_type + "_auc={:.4f};".format(auc))
+        self.log(level='info', message=score_type + "_f1={:.4f};".format(f1))
 
 
 class EstimatorTestCase(unittest.TestCase):
 
     def setUp(self):
-        self.input_dir = os.path.join(os.path.dirname(__file__), 'input_dir')
-        self.save_model_dir = os.path.join(os.path.dirname(__file__), 'save_model_dir')
+        self.input_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'input_dir')
+        self.save_model_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'save_model_dir')
+        self.param_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'parameter.json')
 
     def test_train(self):
         estimator = Estimator(
             input_dir=self.input_dir,
-            param_path=None,
+            param_path=self.param_path,
             save_model_dir=self.save_model_dir,
             pretrain_model_dir=None
         )
