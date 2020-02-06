@@ -1,14 +1,17 @@
+import os
 import pickle
 import boto3
 import pandas as pd
 import numpy as np
 
+from logging import getLogger, StreamHandler, Formatter, INFO
 from io import StringIO
 from abc import ABC, abstractmethod
 from pyspark import SparkContext
 from pyspark.sql import SQLContext
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.model_selection import KFold
+from ..util import get_logger
 
 
 class BasePreprocessor(ABC):
@@ -40,7 +43,11 @@ class BasePreprocessor(ABC):
             purpose: 前処理の目的（train, predict, fine_tune）を選択
             load_pickle_path: 訓練時のオブジェクトを保存したpickleファイルのパス
         """
+        self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
+        self.logger = get_logger(self.__class__.__name__, self.process_id)
+
         if purpose not in ["train", "predict", "fine_tune"]:
+            self.logger.error('invalid purpose')
             raise ValueError('invalid purpose')
 
         if purpose in ["predict", "fine_tune"]:
@@ -126,16 +133,26 @@ class BasePreprocessor(ABC):
         の一連の流れを行う
         このクラスを継承したクラスで、transformメソッドを実装する必要がある
         """
-        # データ読み込み
-        spark_df, spark_context, sql_context = self._load_data()
-        # 前処理
-        pandas_df = self.transform(spark_df, sql_context)
-        # 出力
-        self._output(pandas_df)
-        # インスタンスを保存
-        self._to_pickle()
-        # spoark sessionの終了
-        spark_context.stop()
+        try:
+            self.logger.info("start preprocess")
+            # データ読み込み
+            spark_df, spark_context, sql_context = self._load_data()
+            self.logger.info("complete load data")
+            # 前処理
+            pandas_df = self.transform(spark_df, sql_context)
+            self.logger.info("complete transform")
+            # 出力
+            self._output(pandas_df)
+            self.logger.info("complete output")
+            # インスタンスを保存
+            self._to_pickle()
+            self.logger.info("complete save instance")
+            # spoark sessionの終了
+            spark_context.stop()
+            self.logger.info("complete preprocess")
+        except Exception as e:
+            self.logger.error(str(e))
+            raise e
 
     def one_hot_encoding(self, df, column) -> pd.DataFrame:
         """

@@ -1,7 +1,9 @@
 import os
+import json
 import pandas as pd
 
 from abc import ABC, abstractmethod
+from ..util import get_logger
 
 
 class BaseEstimator(ABC):
@@ -18,6 +20,14 @@ class BaseEstimator(ABC):
         self.param_path = param_path
         self.save_model_dir = save_model_dir
         self.pretrain_model_dir = pretrain_model_dir
+        self.process_id = self._get_process_id()
+        self.logger = get_logger(self.__class__.__name__, self.process_id)
+
+    def _get_process_id(self):
+        with open(self.param_path, 'r') as tc:
+            params = json.load(tc)
+        process_id = params.get('process_id', 'xxxxxxxx')
+        return process_id
 
     def train(self) -> None:
         """
@@ -25,11 +35,17 @@ class BaseEstimator(ABC):
         パラメータの取得→学習データの読み込み→学習→モデルの保存
         の一連の流れを行う
         """
-        params = self.get_params()
-        print(params)
-        X, y = self.get_data()
-        model = self.fit(X, y, params)
-        self.save_model(model)
+        try:
+            self.logger.info("start training")
+            params = self.get_params()
+            self.logger.info(json.dumps(params))
+            X, y = self.get_data()
+            model = self.fit(X, y, params)
+            self.save_model(model)
+            self.logger.info("complete training")
+        except Exception as e:
+            self.logger.error(str(e))
+            raise e
 
     @abstractmethod
     def get_params(self) -> dict:
