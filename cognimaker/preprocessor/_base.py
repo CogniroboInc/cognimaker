@@ -11,6 +11,7 @@ from pyspark import SparkContext
 from pyspark.sql import SQLContext
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.model_selection import KFold
+from ..util import get_logger
 
 
 class BasePreprocessor(ABC):
@@ -43,9 +44,10 @@ class BasePreprocessor(ABC):
             load_pickle_path: 訓練時のオブジェクトを保存したpickleファイルのパス
         """
         self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
-        self.logger = self._get_logger()
+        self.logger = get_logger(self.__class__.__name__, self.process_id)
 
         if purpose not in ["train", "predict", "fine_tune"]:
+            self.logger.error('invalid purpose')
             raise ValueError('invalid purpose')
 
         if purpose in ["predict", "fine_tune"]:
@@ -70,33 +72,6 @@ class BasePreprocessor(ABC):
         self.input_path = input_path
         self.output_path = output_path
         self.pickle_path = pickle_path
-
-    def _get_logger(self):
-        format = "%(asctime)s %(filename)s %(funcName)s [%(levelname)s] %(process_id)s %(message)s"
-        date_format = "%Y-%m-%dT%H:%M:%S%z"
-        logger = getLogger(__name__)
-        logger.setLevel(INFO)
-        _handler = StreamHandler()
-        _formatter = Formatter(format, date_format)
-        _handler.setFormatter(_formatter)
-        logger.addHandler(_handler)
-
-        return logger
-
-    def log(self, level='info', message: str = None):
-
-        extra = {"process_id": self.process_id}
-
-        if level == 'debug':
-            self.logger.debug(message, extra=extra)
-        elif level == 'info':
-            self.logger.info(message, extra=extra)
-        elif level == 'warning':
-            self.logger.warning(message, exc_info=True, extra=extra)
-        elif level == 'error':
-            self.logger.error(message, exc_info=True, extra=extra)
-        elif level == 'critical':
-            self.logger.critical(message, exc_info=True, extra=extra)
 
     def _to_pickle(self):
         if BasePreprocessor._is_s3_path(self.pickle_path):
@@ -159,24 +134,24 @@ class BasePreprocessor(ABC):
         このクラスを継承したクラスで、transformメソッドを実装する必要がある
         """
         try:
-            self.log('info', "start preprocess")
+            self.logger.info("start preprocess")
             # データ読み込み
             spark_df, spark_context, sql_context = self._load_data()
-            self.log('info', "complete load data")
+            self.logger.info("complete load data")
             # 前処理
             pandas_df = self.transform(spark_df, sql_context)
-            self.log('info', "complete transform")
+            self.logger.info("complete transform")
             # 出力
             self._output(pandas_df)
-            self.log('info', "complete output")
+            self.logger.info("complete output")
             # インスタンスを保存
             self._to_pickle()
-            self.log('info', "complete save instance")
+            self.logger.info("complete save instance")
             # spoark sessionの終了
             spark_context.stop()
-            self.log('info', "complete preprocess")
+            self.logger.info("complete preprocess")
         except Exception as e:
-            self.log('error', "preprocess error")
+            self.logger.error(str(e))
             raise e
 
     def one_hot_encoding(self, df, column) -> pd.DataFrame:
