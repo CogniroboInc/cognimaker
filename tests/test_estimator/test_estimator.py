@@ -39,11 +39,11 @@ class Estimator(BaseEstimator):
         auc = roc_auc_score(y, predict_proba)
         f1 = f1_score(y, prediction)
 
-        self.log(level='info', message=score_type + "_accuracy={:.4f};".format(accuracy))
-        self.log(level='info', message=score_type + "_precision={:.4f};".format(precision))
-        self.log(level='info', message=score_type + "_recall={:.4f};".format(recall))
-        self.log(level='info', message=score_type + "_auc={:.4f};".format(auc))
-        self.log(level='info', message=score_type + "_f1={:.4f};".format(f1))
+        self.logger.info(score_type + "_accuracy={:.4f};".format(accuracy))
+        self.logger.info(score_type + "_precision={:.4f};".format(precision))
+        self.logger.info(score_type + "_recall={:.4f};".format(recall))
+        self.logger.info(score_type + "_auc={:.4f};".format(auc))
+        self.logger.info(score_type + "_f1={:.4f};".format(f1))
 
 
 class EstimatorTestCase(unittest.TestCase):
