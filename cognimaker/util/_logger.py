@@ -16,7 +16,7 @@ class CogniMakerLogHandler(StreamHandler):
         StreamHandler.__init__(self)
         self.setFormatter(self._get_formatter())
         if process_id is None:
-            os.environ.get('PROCESS_ID', 'xxxxxxxx')
+            self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
         else:
             self.process_id = process_id
 
