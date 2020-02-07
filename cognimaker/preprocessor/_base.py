@@ -17,7 +17,7 @@ from ..util import get_logger
 class BasePreprocessor(ABC):
 
     # loggerはpickle化できないためクラス変数として保持する。
-    logger = get_logger(__name__)
+    __logger = get_logger(__name__)
 
     @staticmethod
     def _is_s3_path(path: str):
@@ -49,7 +49,7 @@ class BasePreprocessor(ABC):
         self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
 
         if purpose not in ["train", "predict", "fine_tune"]:
-            self.logger.error('invalid purpose')
+            self.__logger.error('invalid purpose')
             raise ValueError('invalid purpose')
 
         if purpose in ["predict", "fine_tune"]:
@@ -136,24 +136,24 @@ class BasePreprocessor(ABC):
         このクラスを継承したクラスで、transformメソッドを実装する必要がある
         """
         try:
-            self.logger.info("start preprocess")
+            self.__logger.info("start preprocess")
             # データ読み込み
             spark_df, spark_context, sql_context = self._load_data()
-            self.logger.info("complete load data")
+            self.__logger.info("complete load data")
             # 前処理
             pandas_df = self.transform(spark_df, sql_context)
-            self.logger.info("complete transform")
+            self.__logger.info("complete transform")
             # 出力
             self._output(pandas_df)
-            self.logger.info("complete output")
+            self.__logger.info("complete output")
             # インスタンスを保存
             self._to_pickle()
-            self.logger.info("complete save instance")
+            self.__logger.info("complete save instance")
             # spoark sessionの終了
             spark_context.stop()
-            self.logger.info("complete preprocess")
+            self.__logger.info("complete preprocess")
         except Exception as e:
-            self.logger.error(str(e))
+            self.__logger.error(str(e))
             raise e
 
     def one_hot_encoding(self, df, column) -> pd.DataFrame:
