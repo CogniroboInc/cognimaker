@@ -16,6 +16,9 @@ from ..util import get_logger
 
 class BasePreprocessor(ABC):
 
+    # loggerはpickle化できないためクラス変数として保持する。
+    logger = get_logger(__name__)
+
     @staticmethod
     def _is_s3_path(path: str):
         return path.startswith('s3://')
@@ -44,7 +47,6 @@ class BasePreprocessor(ABC):
             load_pickle_path: 訓練時のオブジェクトを保存したpickleファイルのパス
         """
         self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
-        self.logger = get_logger(self.__class__.__name__, self.process_id)
 
         if purpose not in ["train", "predict", "fine_tune"]:
             self.logger.error('invalid purpose')
@@ -74,6 +76,8 @@ class BasePreprocessor(ABC):
         self.pickle_path = pickle_path
 
     def _to_pickle(self):
+        # loggerはpickle化できないので、Noneに置き換える
+        # self.logger = None
         if BasePreprocessor._is_s3_path(self.pickle_path):
             bucket, key = BasePreprocessor._parse_s3_file_path(self.pickle_path)
             s3 = boto3.resource('s3')
@@ -90,7 +94,7 @@ class BasePreprocessor(ABC):
         return
             spark_data_frame:
         """
-        spark_context = SparkContext()
+        spark_context = SparkContext.getOrCreate()
         sql_context = SQLContext(spark_context)
         spark_data_frame = sql_context.read.format('com.databricks.spark.csv') \
             .option('header', 'true') \
