@@ -76,8 +76,6 @@ class BasePreprocessor(ABC):
         self.pickle_path = pickle_path
 
     def _to_pickle(self):
-        # loggerはpickle化できないので、Noneに置き換える
-        # self.logger = None
         if BasePreprocessor._is_s3_path(self.pickle_path):
             bucket, key = BasePreprocessor._parse_s3_file_path(self.pickle_path)
             s3 = boto3.resource('s3')
