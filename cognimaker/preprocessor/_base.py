@@ -4,7 +4,6 @@ import boto3
 import pandas as pd
 import numpy as np
 
-from logging import getLogger, StreamHandler, Formatter, INFO
 from io import StringIO
 from abc import ABC, abstractmethod
 from pyspark import SparkContext
@@ -34,8 +33,22 @@ class BasePreprocessor(ABC):
         key = s3_file_path.split(f's3://{bucket}/')[1]
         return bucket, key
 
+    @staticmethod
+    def _load_pickle(path):
+        if BasePreprocessor._is_s3_path(path):
+            bucket, key = BasePreprocessor._parse_s3_file_path(load_pickle_path)
+            s3 = boto3.resource('s3')
+            response = s3.Object(bucket, key).get()
+            obj = pickle.loads(response['Body'].read())
+            return obj
+        else:
+            with open(path, mode='rb') as f:
+                obj = pickle.load(f)
+                return obj
+
     def __init__(
         self, input_path: str, output_path: str, pickle_path: str,
+        categorical_columns: list = [],
         purpose: str = 'train', load_pickle_path: str = None
     ):
         """
@@ -45,35 +58,30 @@ class BasePreprocessor(ABC):
             pickle_path: pickleを保存（又はロード）するパス
             purpose: 前処理の目的（train, predict, fine_tune）を選択
             load_pickle_path: 訓練時のオブジェクトを保存したpickleファイルのパス
+            categorical_columns: カテゴリ値のカラムのリスト
         """
-        self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
-
         if purpose not in ["train", "predict", "fine_tune"]:
             self.__logger.error('invalid purpose')
             raise ValueError('invalid purpose')
-
-        if purpose in ["predict", "fine_tune"]:
-            if BasePreprocessor._is_s3_path(load_pickle_path):
-                bucket, key = BasePreprocessor._parse_s3_file_path(load_pickle_path)
-                s3 = boto3.resource('s3')
-                response = s3.Object(bucket, key).get()
-                obj = pickle.loads(response['Body'].read())
-                self.encoder_dict = obj.encoder_dict
-            else:
-                with open(load_pickle_path, mode='rb') as f:
-                    obj = pickle.load(f)
-                    self.encoder_dict = obj.encoder_dict
-
-        else:
-            # カラムとエンコーダーの対応関係を管理するdict
-            self.encoder_dict = {}
-
+        
+        self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
+        self.categorical_columns = categorical_columns
         # 前処理結果として出力するカラム
         self.output_columns = []
         self.purpose = purpose
         self.input_path = input_path
         self.output_path = output_path
         self.pickle_path = pickle_path
+        # カラムとエンコーダーの対応関係を管理するdict
+        self.encoder_dict = {}
+        # カテゴリ値のカラムごとのユニーク値のリストを管理するdict
+        self.category_value_dict = {}
+        
+        if purpose in ["predict", "fine_tune"]:
+            obj = BasePreprocessor._load_pickle(load_pickle_path)
+            self.encoder_dict = obj.encoder_dict
+            if hasattr(obj, 'category_value_dict'):
+                self.category_value_dict = obj.category_value_dict
 
     def _to_pickle(self):
         if BasePreprocessor._is_s3_path(self.pickle_path):
@@ -99,7 +107,57 @@ class BasePreprocessor(ABC):
             .option('inferSchema', 'true') \
             .load(self.input_path)
 
+        if self.purpose == 'train':
+            self._set_category_value_dict(spark_data_frame)
+        else:
+            spark_data_frame = self._filter(spark_data_frame)
+
         return spark_data_frame, spark_context, sql_context
+
+    def _set_category_value_dict(self, spark_df):
+        """
+        カテゴリカラムのユニーク値をdictに保存するメソッド
+        param
+            spark_df: 読み込んだspark Data Frame
+        """
+        for column in self.categorical_columns:
+            # categorical_columnsにはモデルが受け入れるカラムのリストを入れるので、
+            # spark_dfに含まれているカラムのみdictに入れる。
+            if column in spark_df.columns:
+                self.category_value_dict[column] = \
+                    spark_df.select(column).distinct().rdd.map(lambda r: r[0]).collect()
+
+    def _filter(self, spark_df):
+        """
+        推論または追加学習時に、カテゴリカルなカラムを
+        学習時のデータのユニーク値でフィルターする。
+        param
+            spark_df: 読み込んだspark data frame
+        return
+            spark_df: self.category_value_dictの内容でフィルターを掛けたデータ
+        """
+        # Noneの場合（以前のバージョンで作成されたモデルの場合）処理しない
+        if self.category_value_dict:
+            not_train_values_dict = {}
+            for k,v in self.category_value_dict.items():
+                not_train_values_dict[k] = set(spark_df.select(k).distinct().rdd.map(lambda r: r[0]).collect()) - set(v)
+                if not_train_values_dict[k]:
+                    self.__logger.warning(
+                        "カラム：{0} に学習時にないカテゴリ：{1} が含まれています。".format(k, not_train_values_dict[k])
+                    )
+            # フィルタ前のレコード数を記録しておき、除外されたレコード数をカウントする。
+            count_before = spark_df.count()
+            for k,v in not_train_values_dict.items():
+                if v:
+                    spark_df = spark_df.filter(~spark_df[k].isin(v))
+            count_after = spark_df.count()
+            excluded_count = count_before - count_after
+            if excluded_count > 0:
+                self.__logger.warning(
+                    "学習時にないカテゴリ値の除外により、{0}レコードが除外されました。".format(excluded_count)
+                )
+
+        return spark_df
 
     @abstractmethod
     def transform(self, spark_df, sql_context) -> pd.DataFrame:
