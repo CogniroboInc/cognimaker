@@ -132,18 +132,24 @@ class BasePreprocessor(ABC):
         """
         # Noneの場合（以前のバージョンで作成されたモデルの場合）処理しない
         if self.category_value_dict:
+            not_train_values_dict = {}
             for k,v in self.category_value_dict.items():
-                not_train_values = set(spark_df.select(k).distinct().rdd.map(lambda r: r[0]).collect()) - set(v)
-                if not_train_values:
-                    # フィルタ前のレコード数を記録しておき、除外されたレコード数をカウントする。
-                    count_before = spark_df.count()
-                    spark_df = spark_df.filter(spark_df[k].isin(v))
-                    count_after = spark_df.count()
-                    excluded_count = count_before - count_after
+                not_train_values_dict[k] = set(spark_df.select(k).distinct().rdd.map(lambda r: r[0]).collect()) - set(v)
+                if not_train_values_dict[k]:
                     self.__logger.warning(
-                        "カラム：{0} に学習時にないカテゴリ：{1} が含まれています。" \
-                        "{2}レコードが除外されました。".format(k, not_train_values, excluded_count)
+                        "カラム：{0} に学習時にないカテゴリ：{1} が含まれています。".format(k, not_train_values_dict[k])
                     )
+            # フィルタ前のレコード数を記録しておき、除外されたレコード数をカウントする。
+            count_before = spark_df.count()
+            for k,v in not_train_values_dict.items():
+                if v:
+                    spark_df = spark_df.filter(~spark_df[k].isin(v))
+            count_after = spark_df.count()
+            excluded_count = count_before - count_after
+            if excluded_count > 0:
+                self.__logger.warning(
+                    "学習時にないカテゴリ値の除外により、{0}レコードが除外されました。".format(excluded_count)
+                )
 
         return spark_df
 
