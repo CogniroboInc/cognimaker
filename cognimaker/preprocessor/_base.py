@@ -146,7 +146,7 @@ class BasePreprocessor(ABC):
                     count_after = spark_df.count()
                     excluded_count = count_before - count_after
                     self.__logger.warning(
-                        "カラム：{0} に学習時にないカテゴリ：{1} が含まれています。\n" \
+                        "カラム：{0} に学習時にないカテゴリ：{1} が含まれています。" \
                         "{2}レコードが除外されました。".format(k, not_train_values, excluded_count)
                     )
 
