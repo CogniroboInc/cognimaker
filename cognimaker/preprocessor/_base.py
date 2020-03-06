@@ -35,7 +35,7 @@ class BasePreprocessor(ABC):
 
     def __init__(
         self, input_path: str, output_path: str, pickle_path: str,
-        categorical_columns: list,
+        categorical_columns: list = None,
         purpose: str = 'train', load_pickle_path: str = None
     ):
         """
@@ -113,17 +113,18 @@ class BasePreprocessor(ABC):
             .load(self.input_path)
 
         if self.purpose == 'train':
-            self.set_category_value_dict(spark_data_frame)
+            self._set_category_value_dict(spark_data_frame)
         else:
             spark_data_frame = self._filter(spark_data_frame)
 
         return spark_data_frame, spark_context, sql_context
 
-    def set_category_value_dict(self, spark_df):
-        for column in self.categorical_columns:
-            if column in spark_df.columns:
-                self.category_value_dict[column] = \
-                    spark_df.select(column).distinct().rdd.map(lambda r: r[0]).collect()
+    def _set_category_value_dict(self, spark_df):
+        if self.categorical_columns:
+            for column in self.categorical_columns:
+                if column in spark_df.columns:
+                    self.category_value_dict[column] = \
+                        spark_df.select(column).distinct().rdd.map(lambda r: r[0]).collect()
 
     def _filter(self, spark_df):
         """
