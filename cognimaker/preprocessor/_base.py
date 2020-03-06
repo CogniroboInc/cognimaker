@@ -4,7 +4,6 @@ import boto3
 import pandas as pd
 import numpy as np
 
-from logging import getLogger, StreamHandler, Formatter, INFO
 from io import StringIO
 from abc import ABC, abstractmethod
 from pyspark import SparkContext
@@ -36,6 +35,7 @@ class BasePreprocessor(ABC):
 
     def __init__(
         self, input_path: str, output_path: str, pickle_path: str,
+        categorical_columns: list,
         purpose: str = 'train', load_pickle_path: str = None
     ):
         """
@@ -45,8 +45,10 @@ class BasePreprocessor(ABC):
             pickle_path: pickleを保存（又はロード）するパス
             purpose: 前処理の目的（train, predict, fine_tune）を選択
             load_pickle_path: 訓練時のオブジェクトを保存したpickleファイルのパス
+            categorical_columns: カテゴリ値のカラムのリスト
         """
         self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
+        self.categorical_columns = categorical_columns
 
         if purpose not in ["train", "predict", "fine_tune"]:
             self.__logger.error('invalid purpose')
@@ -59,14 +61,25 @@ class BasePreprocessor(ABC):
                 response = s3.Object(bucket, key).get()
                 obj = pickle.loads(response['Body'].read())
                 self.encoder_dict = obj.encoder_dict
+                if hasattr(obj, 'category_value_dict'):
+                    self.category_value_dict = obj.category_value_dict
+                else:
+                    self.category_value_dict = None
             else:
                 with open(load_pickle_path, mode='rb') as f:
                     obj = pickle.load(f)
                     self.encoder_dict = obj.encoder_dict
+                    if hasattr(obj, 'category_value_dict'):
+                        print("load category value dict")
+                        self.category_value_dict = obj.category_value_dict
+                    else:
+                        self.category_value_dict = None
 
         else:
             # カラムとエンコーダーの対応関係を管理するdict
             self.encoder_dict = {}
+            # カテゴリ値のカラムごとのユニーク値のリストを管理するdict
+            self.category_value_dict = {}
 
         # 前処理結果として出力するカラム
         self.output_columns = []
@@ -99,7 +112,44 @@ class BasePreprocessor(ABC):
             .option('inferSchema', 'true') \
             .load(self.input_path)
 
+        if self.purpose == 'train':
+            self.set_category_value_dict(spark_data_frame)
+        else:
+            spark_data_frame = self._filter(spark_data_frame)
+
         return spark_data_frame, spark_context, sql_context
+
+    def set_category_value_dict(self, spark_df):
+        for column in self.categorical_columns:
+            if column in spark_df.columns:
+                self.category_value_dict[column] = \
+                    spark_df.select(column).distinct().rdd.map(lambda r: r[0]).collect()
+
+    def _filter(self, spark_df):
+        """
+        推論または追加学習時に、カテゴリカルなカラムを
+        学習時のデータのユニーク値でフィルターする。
+        param
+            spark_df: 読み込んだspark data frame
+        return
+            spark_df: self.category_value_dictの内容でフィルターを掛けたデータ
+        """
+        # Noneの場合（以前のバージョンで作成されたモデルの場合）処理しない
+        if self.category_value_dict:
+            for k,v in self.category_value_dict.items():
+                not_train_values = set(spark_df.select(k).distinct().rdd.map(lambda r: r[0]).collect()) - set(v)
+                if not_train_values:
+                    # フィルタ前のレコード数を記録しておき、除外されたレコード数をカウントする。
+                    count_before = spark_df.count()
+                    spark_df = spark_df.filter(spark_df[k].isin(v))
+                    count_after = spark_df.count()
+                    excluded_count = count_before - count_after
+                    self.__logger.warning(
+                        "カラム：{0} に学習時にないカテゴリ：{1} が含まれています。\n" \
+                        "{2}レコードが除外されました。".format(k, not_train_values, excluded_count)
+                    )
+
+        return spark_df
 
     @abstractmethod
     def transform(self, spark_df, sql_context) -> pd.DataFrame:
