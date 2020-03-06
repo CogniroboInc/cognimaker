@@ -115,7 +115,14 @@ class BasePreprocessor(ABC):
         return spark_data_frame, spark_context, sql_context
 
     def _set_category_value_dict(self, spark_df):
+        """
+        カテゴリカラムのユニーク値をdictに保存するメソッド
+        param
+            spark_df: 読み込んだspark Data Frame
+        """
         for column in self.categorical_columns:
+            # categorical_columnsにはモデルが受け入れるカラムのリストを入れるので、
+            # spark_dfに含まれているカラムのみdictに入れる。
             if column in spark_df.columns:
                 self.category_value_dict[column] = \
                     spark_df.select(column).distinct().rdd.map(lambda r: r[0]).collect()
