@@ -33,9 +33,22 @@ class BasePreprocessor(ABC):
         key = s3_file_path.split(f's3://{bucket}/')[1]
         return bucket, key
 
+    @staticmethod
+    def _load_pickle(path):
+        if BasePreprocessor._is_s3_path(path):
+            bucket, key = BasePreprocessor._parse_s3_file_path(load_pickle_path)
+            s3 = boto3.resource('s3')
+            response = s3.Object(bucket, key).get()
+            obj = pickle.loads(response['Body'].read())
+            return obj
+        else:
+            with open(path, mode='rb') as f:
+                obj = pickle.load(f)
+                return obj
+
     def __init__(
         self, input_path: str, output_path: str, pickle_path: str,
-        categorical_columns: list = None,
+        categorical_columns: list = [],
         purpose: str = 'train', load_pickle_path: str = None
     ):
         """
@@ -47,46 +60,28 @@ class BasePreprocessor(ABC):
             load_pickle_path: 訓練時のオブジェクトを保存したpickleファイルのパス
             categorical_columns: カテゴリ値のカラムのリスト
         """
-        self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
-        self.categorical_columns = categorical_columns
-
         if purpose not in ["train", "predict", "fine_tune"]:
             self.__logger.error('invalid purpose')
             raise ValueError('invalid purpose')
-
-        if purpose in ["predict", "fine_tune"]:
-            if BasePreprocessor._is_s3_path(load_pickle_path):
-                bucket, key = BasePreprocessor._parse_s3_file_path(load_pickle_path)
-                s3 = boto3.resource('s3')
-                response = s3.Object(bucket, key).get()
-                obj = pickle.loads(response['Body'].read())
-                self.encoder_dict = obj.encoder_dict
-                if hasattr(obj, 'category_value_dict'):
-                    self.category_value_dict = obj.category_value_dict
-                else:
-                    self.category_value_dict = None
-            else:
-                with open(load_pickle_path, mode='rb') as f:
-                    obj = pickle.load(f)
-                    self.encoder_dict = obj.encoder_dict
-                    if hasattr(obj, 'category_value_dict'):
-                        print("load category value dict")
-                        self.category_value_dict = obj.category_value_dict
-                    else:
-                        self.category_value_dict = None
-
-        else:
-            # カラムとエンコーダーの対応関係を管理するdict
-            self.encoder_dict = {}
-            # カテゴリ値のカラムごとのユニーク値のリストを管理するdict
-            self.category_value_dict = {}
-
+        
+        self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
+        self.categorical_columns = categorical_columns
         # 前処理結果として出力するカラム
         self.output_columns = []
         self.purpose = purpose
         self.input_path = input_path
         self.output_path = output_path
         self.pickle_path = pickle_path
+        # カラムとエンコーダーの対応関係を管理するdict
+        self.encoder_dict = {}
+        # カテゴリ値のカラムごとのユニーク値のリストを管理するdict
+        self.category_value_dict = {}
+        
+        if purpose in ["predict", "fine_tune"]:
+            obj = BasePreprocessor._load_pickle(load_pickle_path)
+            self.encoder_dict = obj.encoder_dict
+            if hasattr(obj, 'category_value_dict'):
+                self.category_value_dict = obj.category_value_dict
 
     def _to_pickle(self):
         if BasePreprocessor._is_s3_path(self.pickle_path):
