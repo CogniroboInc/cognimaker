@@ -36,7 +36,7 @@ class BasePreprocessor(ABC):
     @staticmethod
     def _load_pickle(path):
         if BasePreprocessor._is_s3_path(path):
-            bucket, key = BasePreprocessor._parse_s3_file_path(load_pickle_path)
+            bucket, key = BasePreprocessor._parse_s3_file_path(path)
             s3 = boto3.resource('s3')
             response = s3.Object(bucket, key).get()
             obj = pickle.loads(response['Body'].read())
@@ -63,7 +63,7 @@ class BasePreprocessor(ABC):
         if purpose not in ["train", "predict", "fine_tune"]:
             self.__logger.error('invalid purpose')
             raise ValueError('invalid purpose')
-        
+
         self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
         self.categorical_columns = categorical_columns
         # 前処理結果として出力するカラム
@@ -76,7 +76,7 @@ class BasePreprocessor(ABC):
         self.encoder_dict = {}
         # カテゴリ値のカラムごとのユニーク値のリストを管理するdict
         self.category_value_dict = {}
-        
+
         if purpose in ["predict", "fine_tune"]:
             obj = BasePreprocessor._load_pickle(load_pickle_path)
             self.encoder_dict = obj.encoder_dict
@@ -139,7 +139,7 @@ class BasePreprocessor(ABC):
         # Noneの場合（以前のバージョンで作成されたモデルの場合）処理しない
         if self.category_value_dict:
             not_train_values_dict = {}
-            for k,v in self.category_value_dict.items():
+            for k, v in self.category_value_dict.items():
                 not_train_values_dict[k] = set(spark_df.select(k).distinct().rdd.map(lambda r: r[0]).collect()) - set(v)
                 if not_train_values_dict[k]:
                     self.__logger.warning(
@@ -147,7 +147,7 @@ class BasePreprocessor(ABC):
                     )
             # フィルタ前のレコード数を記録しておき、除外されたレコード数をカウントする。
             count_before = spark_df.count()
-            for k,v in not_train_values_dict.items():
+            for k, v in not_train_values_dict.items():
                 if v:
                     spark_df = spark_df.filter(~spark_df[k].isin(v))
             count_after = spark_df.count()
