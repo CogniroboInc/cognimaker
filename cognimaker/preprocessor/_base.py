@@ -177,6 +177,10 @@ class BasePreprocessor(ABC):
         param
             pandas_df: 出力するpandas DataFrame
         """
+        # レコード数が0の時はエラーとする
+        if len(pandas_df) == 0:
+            raise ValueError("前処理結果のレコード数が0です。")
+
         if BasePreprocessor._is_s3_path(self.output_path):
             buffer = StringIO()
             pandas_df[self.output_columns].to_csv(buffer, index=False, header=False)
