@@ -188,7 +188,7 @@ class BasePreprocessor(ABC):
             s3 = boto3.resource('s3')
             s3.Object(output_bucket, output_key).put(Body=buffer.getvalue())
         else:
-            pandas_df.to_csv(self.output_path, index=False, header=False)
+            pandas_df[self.output_columns].to_csv(self.output_path, index=False, header=False)
 
     def preprocess(self):
         """
