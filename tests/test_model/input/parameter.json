@@ -1,0 +1,6 @@
+{
+  "process_id": "test00001",
+  "reg_alpha": "1.0",
+  "reg_lambda": "5.0",
+  "n_estimators": "300"
+}
