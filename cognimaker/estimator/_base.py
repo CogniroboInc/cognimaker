@@ -89,14 +89,17 @@ class BaseEstimator(ABC):
                     'the role specified does not have permission to access the data.'
                 ).format(self.input_dir)
             )
-        raw_data = [pd.read_csv(file) for file in input_files]
+        raw_data = [pd.read_csv(file, header=0) for file in input_files]
         data = pd.concat(raw_data)
         # 学習データの形式は以下を想定している
         # １列目　　：IDカラム
         # ２列目　　：教師カラム
         # ３列目以降：特徴量カラム
-        y = data.iloc[:, 1]
-        X = data.iloc[:, 2:]
+        y = data.iloc[:, 1].values
+        X = data.iloc[:, 2:].values
+
+        # 特徴量のカラム名を取得
+        self.feature_columns = data.columns[2:]
 
         return X, y
 
