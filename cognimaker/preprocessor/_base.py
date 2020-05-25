@@ -181,14 +181,20 @@ class BasePreprocessor(ABC):
         if len(pandas_df) == 0:
             raise ValueError("前処理結果のレコード数が0です。")
 
+        # 推論時はヘッダーを出力しない
+        # 学習・追加学習時は出力する（特徴量の重要度の出力のため）
+        if self.purpose == "predict"
+            header = False
+        else:
+            header = True
         if BasePreprocessor._is_s3_path(self.output_path):
             buffer = StringIO()
-            pandas_df[self.output_columns].to_csv(buffer, index=False, header=False)
+            pandas_df[self.output_columns].to_csv(buffer, index=False, header=header)
             output_bucket, output_key = BasePreprocessor._parse_s3_file_path(self.output_path)
             s3 = boto3.resource('s3')
             s3.Object(output_bucket, output_key).put(Body=buffer.getvalue())
         else:
-            pandas_df[self.output_columns].to_csv(self.output_path, index=False, header=False)
+            pandas_df[self.output_columns].to_csv(self.output_path, index=False, header=header)
 
     def preprocess(self):
         """

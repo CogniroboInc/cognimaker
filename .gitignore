@@ -131,3 +131,4 @@ dmypy.json
 *.pkl
 *.pickle
 *.csv
+.DS_Store
