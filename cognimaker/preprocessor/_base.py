@@ -183,7 +183,7 @@ class BasePreprocessor(ABC):
 
         # 推論時はヘッダーを出力しない
         # 学習・追加学習時は出力する（特徴量の重要度の出力のため）
-        if self.purpose == "predict"
+        if self.purpose == "predict":
             header = False
         else:
             header = True
