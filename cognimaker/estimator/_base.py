@@ -11,6 +11,7 @@ class BaseEstimator(ABC):
 
     INDICATOR_FILE = 'indicator.json'
     RANDOM_SEED = 592 #Cogni
+    SCORE_FORMAT = "MODEL_SCORE={};"
 
     def __init__(self, input_dir: str, output_dir: str, param_path: str = None, pretrain_model_dir: str = None):
         """
@@ -52,6 +53,7 @@ class BaseEstimator(ABC):
                     X, y, test_size=test_size, random_state=self.RANDOM_SEED)
             model = self.fit(X_train, y_train, params)
             self.save_model(model)
+            self.log_score(model, X_test, y_test)
             self.calc_indicators(model, X_test, y_test)
             self.save_indicators()
             self.logger.info("complete training")
@@ -108,6 +110,37 @@ class BaseEstimator(ABC):
         訓練用データ（train）と検証用データ（test）の比率を決める関数
         """
         return 0.2
+
+    def log_score(self, model, X, y):
+        """
+        モデルのスコアを算出し、標準出力に出力するメソッド
+        trainメソッド内で呼び出される。
+
+        Args:
+            model: 学習ずみのモデルインスタンス
+            X: スコア算出用の特徴量データ
+            y: スコア算出用の教師データ
+        """
+        score = self.get_score(model, X, y)
+        self.logger.info(self.SCORE_FORMAT.format(score))
+        # indicatorに追加
+        self.indicators["score"] = score
+
+    @abstractmethod
+    def get_score(self, model, X, y) -> float:
+        """
+        モデルのスコアを算出するメソッド
+        モデルごとの評価指標をインプリメントする
+        単一のスコア指標を返す。
+
+        Args:
+            model: 学習ずみのモデルインスタンス
+            X: スコア算出用の特徴量データ
+            y: スコア算出用の教師データ
+        return
+            score: モデルのスコア指標
+        """
+        raise NotImplementedError()
 
     @abstractmethod
     def fit(self, X, y, params) -> object:

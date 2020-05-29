@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import roc_auc_score
 from cognimaker.estimator import BaseClassifier
 
 
@@ -30,6 +31,10 @@ class MyClassifier(BaseClassifier):
 
     def get_predict(self, model, X):
         return model.predict(X)
+
+    def get_score(self, model, X, y):
+        predict_proba = model.predict_proba(X)
+        return roc_auc_score(y, predict_proba[:, 1])
 
 
 class ClassifierTestCase(unittest.TestCase):

@@ -25,8 +25,6 @@ class BaseClassifier(BaseEstimator):
         # 予測確率と予測結果の算出
         predict_proba = self.get_predict_proba(model, X)
         y_pred = self.get_predict(model, X)
-        self.logger.info(f"predict_proba: {predict_proba}")
-        self.logger.info(f"y_pred: {y_pred}")
 
         # 正解率
         accuracy = accuracy_score(y, y_pred)
@@ -53,10 +51,14 @@ class BaseClassifier(BaseEstimator):
         }
         self.logger.info("confusion_matrix \n {};".format(cm))
 
-        # AUC
-        auc = roc_auc_score(y, predict_proba)
-        self.indicators["auc"] = auc
-        self.logger.info("auc={:.4f};".format(auc))
+        # AUC（教師データに片方のラベルしか無い場合エラーになるので例外処理をいれる）
+        try:
+            auc = roc_auc_score(y, predict_proba)
+            self.indicators["auc"] = auc
+            self.logger.info("auc={:.4f};".format(auc))
+        except Exception as e:
+            self.indicators["auc"] = None
+            self.logger.error(str(e))
 
         # ROC（教師データに片方のラベルしか無い場合エラーになるので例外処理をいれる）
         try:
