@@ -1,0 +1,46 @@
+ARG BASE_IMAGE=python:3.7-buster
+FROM $BASE_IMAGE
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system packages
+# Add any packages that should be installed on the system (such as CUDA) after `sudo`
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+    nginx \
+    sudo \
+    && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /usr/local/src/*
+
+# Install dumb-init to use as PID 1
+RUN pip install dumb-init
+
+ENV PYTHONUNBUFFERED=TRUE
+ENV PYTHONDONTWRITEBYTECODE=TRUE
+
+# Use these args to customize the branch to pull from (for developing cognimaker)
+# and the Python module containing the model definition
+ARG COGNIMAKER_BRANCH=develop
+ARG MODEL_MODULE=model
+
+RUN pip install git+https://github.com/CogniroboCloud/cognimaker.git@$COGNIMAKER_BRANCH
+
+WORKDIR /opt/program
+ENV PATH="/opt/program:${PATH}"
+
+
+# Install cognimaker entrypoint files for Sagemaker
+RUN python -m cognimaker.runner.sagemaker.install_entrypoint && sed -i -e "s/__COGNIMAKER_MODEL_MODULE__/$MODEL_MODULE/g" *.py
+
+# Install dependencies of this model
+COPY requirements.txt .
+RUN pip install -r requirements.txt && rm -f requirements.txt
+
+# Set up the program in the image
+COPY model .
+
+ENTRYPOINT ["/usr/local/bin/dumb-init", "--", "python", "entrypoint.py"]
