@@ -1,7 +1,8 @@
 import os
 import json
+import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, RepeatedStratifiedKFold
 
 from abc import ABC, abstractmethod
 from ..util import get_logger, NumpyEncoder
@@ -29,7 +30,7 @@ class BaseEstimator(ABC):
         self.logger = get_logger(self.__class__.__name__, self.process_id)
         self.indicators = {}
 
-    def _get_process_id(self):
+    def _get_process_id(self) -> str:
         with open(self.param_path, 'r') as tc:
             params = json.load(tc)
         process_id = params.get('process_id', 'xxxxxxxx')
@@ -47,19 +48,46 @@ class BaseEstimator(ABC):
             self.logger.info(json.dumps(params))
             X, y = self.get_data()
             self.logger.info(f"data size: {len(X)}")
-            test_size = self.get_test_size()
-            X_train, X_test, y_train, y_test = \
-                train_test_split(
-                    X, y, test_size=test_size, random_state=self.RANDOM_SEED)
-            model = self.fit(X_train, y_train, params)
+
+            eval_method = self.choose_evaluation(X.shape[0])
+            if eval_method['method'] == 'cv':
+                scores = []
+                cv = RepeatedStratifiedKFold(
+                    n_splits=eval_method['num_splits'], n_repeats=eval_method['repeats'], random_state=self.RANDOM_SEED)
+                for train_idx, test_idx in cv.split(X, y):
+                    X_train = X[train_idx]
+                    y_train = y[train_idx]
+                    X_test = X[test_idx]
+                    y_test = y[test_idx]
+
+                    model = self.fit(X_train, y_train, params)
+                    scores.append(self.get_score(model, X_test, y_test))
+                score = np.mean(scores)
+                model = self.fit(X, y, params)
+            elif eval_method['method'] == 'split':
+                X_train, y_train, X_test, y_test = train_test_split(
+                    X, y, test_size=eval_method['test_size'], random_state=self.RANDOM_SEED)
+                model = self.fit(X_train, y_train, params)
+                score = self.get_score(model, X_test, y_test)
+
             self.save_model(model)
-            self.log_score(model, X_test, y_test)
+            self.log_score(score)
             self.calc_indicators(model, X_test, y_test)
             self.save_indicators()
             self.logger.info("complete training")
         except Exception as e:
             self.logger.error(str(e))
             raise e
+
+    @abstractmethod
+    def choose_evaluation(self, num_rows) -> dict:
+        raise NotImplementedError()
+
+    def choose_cross_validation(self, num_splits=5, repeats=1) -> dict:
+        return dict(method='cv', num_splits=num_splits, repeats=repeats)
+
+    def choose_test_split(self, test_size=0.2) -> dict:
+        return dict(method='split',  test_size=test_size)
 
     @abstractmethod
     def get_params(self) -> dict:
@@ -72,7 +100,7 @@ class BaseEstimator(ABC):
         """
         raise NotImplementedError()
 
-    def get_data(self) -> (pd.DataFrame, pd.Series):
+    def get_data(self) -> (np.ndarray, np.ndarray):
         """
         学習データを読み込むメソッド
         input_dirで指定したフォルダにあるcsvファイルを読み込み
@@ -105,23 +133,14 @@ class BaseEstimator(ABC):
 
         return X, y
 
-    def get_test_size(self) -> float:
+    def log_score(self, score) -> None:
         """
-        訓練用データ（train）と検証用データ（test）の比率を決める関数
-        """
-        return 0.2
-
-    def log_score(self, model, X, y):
-        """
-        モデルのスコアを算出し、標準出力に出力するメソッド
+        モデルのスコアを標準出力に出力するメソッド
         trainメソッド内で呼び出される。
 
         Args:
-            model: 学習ずみのモデルインスタンス
-            X: スコア算出用の特徴量データ
-            y: スコア算出用の教師データ
+            score: スコア
         """
-        score = self.get_score(model, X, y)
         self.logger.info(self.SCORE_FORMAT.format(score))
         # indicatorに追加
         self.indicators["score"] = score
@@ -179,7 +198,7 @@ class BaseEstimator(ABC):
         """
         raise NotImplementedError()
 
-    def save_indicators(self):
+    def save_indicators(self) -> None:
         """
         モデルの評価指標をJSON形式で出力するメソッド
         output_dirで指定したディレクトリに保存する
