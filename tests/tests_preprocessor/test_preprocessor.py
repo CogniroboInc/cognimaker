@@ -4,6 +4,12 @@ import os
 
 from cognimaker.preprocessor import BasePreprocessor
 
+CATEGORY_COLUMNS = [
+    '性別',
+    '年代',
+    '販売店',
+    'カテゴリ'
+]
 
 class Preprocessor(BasePreprocessor):
 
@@ -105,9 +111,9 @@ class PreprocessorTestCase(unittest.TestCase):
             input_path="s3a://cognimaker-test/input/test.csv",
             output_path="s3://cognimaker-test/output/test.csv",
             pickle_path="s3://cognimaker-test/pickle/train_preprocessor.pickle",
-            purpose="train"
+            purpose="train",
+            categorical_columns = CATEGORY_COLUMNS
         )
-
         preprocessor.preprocess()
 
     def test_1_transform_predict(self):
@@ -116,9 +122,9 @@ class PreprocessorTestCase(unittest.TestCase):
             output_path="s3://cognimaker-test/output/test_drop.csv",
             pickle_path="s3://cognimaker-test/pickle/predict_preprocessor.pickle",
             purpose="predict",
+            categorical_columns = CATEGORY_COLUMNS,
             load_pickle_path="s3://cognimaker-test/pickle/train_preprocessor.pickle"
         )
-
         preprocessor.preprocess()
 
     def test_2_transform_train_local(self):
@@ -126,9 +132,9 @@ class PreprocessorTestCase(unittest.TestCase):
             input_path=os.path.dirname(os.path.abspath(__file__)) + "/test_input.csv",
             output_path=os.path.dirname(os.path.abspath(__file__)) + "/test_output.csv",
             pickle_path=os.path.dirname(os.path.abspath(__file__)) + "/train_preprocessor.pickle",
-            purpose="train"
+            purpose="train",
+            categorical_columns = CATEGORY_COLUMNS
         )
-
         preprocessor.preprocess()
 
     def test_3_transform_predict_local(self):
@@ -137,19 +143,20 @@ class PreprocessorTestCase(unittest.TestCase):
             output_path=os.path.dirname(os.path.abspath(__file__)) + "/test_output_drop.csv",
             pickle_path=os.path.dirname(os.path.abspath(__file__)) + "/predict_preprocessor.pickle",
             purpose="predict",
+            categorical_columns = CATEGORY_COLUMNS,
             load_pickle_path=os.path.dirname(os.path.abspath(__file__)) + "/train_preprocessor.pickle"
         )
-
         preprocessor.preprocess()
 
-    def test_4_transform_train_local_error(self):
+    def test_4_transform_predict_add_category(self):
         preprocessor = Preprocessor(
-            input_path=os.path.dirname(os.path.abspath(__file__)) + "/not_exist.csv",
-            output_path=os.path.dirname(os.path.abspath(__file__)) + "/test_output_error.csv",
-            pickle_path=os.path.dirname(os.path.abspath(__file__)) + "/train_error.pickle",
-            purpose="train",
+            input_path=os.path.dirname(os.path.abspath(__file__)) + "/test_input_add.csv",
+            output_path=os.path.dirname(os.path.abspath(__file__)) + "/test_output_add.csv",
+            pickle_path=os.path.dirname(os.path.abspath(__file__)) + "/predict_add.pickle",
+            purpose="predict",
+            categorical_columns = CATEGORY_COLUMNS,
+            load_pickle_path=os.path.dirname(os.path.abspath(__file__)) + "/train_preprocessor.pickle"
         )
-
         preprocessor.preprocess()
 
 
