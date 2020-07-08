@@ -81,12 +81,43 @@ class BaseEstimator(ABC):
 
     @abstractmethod
     def choose_evaluation(self, num_rows) -> dict:
+        """
+        モデルの評価方法を選択するためのメソッド
+
+        評価方法としてクロスバリデーションかテストスプリットかを選択できる。選択するには
+        このメソッドを継承して評価方法を指定したdictを返す。要求されるdictを返すためには
+        `self.choose_cross_validation()`メソッドか`self.choose_test_split()`
+        メソッドを呼び出してその返り値を返すことが推奨される。
+
+        データの行数を渡されるのでデータ量を条件に評価方法を選択することも可能。
+
+        param
+            num_rows: データの行数
+        """
         raise NotImplementedError()
 
     def choose_cross_validation(self, num_splits=5, repeats=1) -> dict:
+        """
+        クロスバリデーション評価方法を選択するdictを返す
+
+        クロスバリデーションのスプリット数と試行回数を指定できる。試行回数が２以上の場合、
+        データ全体で複数回クロスバリデーションを行う（毎回スプリットはランダム）。
+
+        param
+            num_splits: スプリットの数
+            repeats: 試行回数
+        """
         return dict(method='cv', num_splits=num_splits, repeats=repeats)
 
     def choose_test_split(self, test_size=0.2) -> dict:
+        """
+        テストスプリット評価方法を選択するdictを返す
+
+        テストスプリットの大きさ（データ全体の割合）を指定できる。
+
+        param
+            test_size: テストスプリットの大きさ 有効範囲：(0, 1.0)
+        """
         return dict(method='split',  test_size=test_size)
 
     @abstractmethod
