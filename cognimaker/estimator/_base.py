@@ -52,6 +52,7 @@ class BaseEstimator(ABC):
             eval_method = self.choose_evaluation(X.shape[0])
             if eval_method['method'] == 'cv':
                 scores = []
+                indicators = []
                 cv = RepeatedStratifiedKFold(
                     n_splits=eval_method['num_splits'], n_repeats=eval_method['repeats'], random_state=self.RANDOM_SEED)
                 for train_idx, test_idx in cv.split(X, y):
@@ -62,17 +63,21 @@ class BaseEstimator(ABC):
 
                     model = self.fit(X_train, y_train, params)
                     scores.append(self.get_score(model, X_test, y_test))
+                    indicators.append(self.calc_indicators(model, X_test, y_test))
                 score = np.mean(scores)
                 model = self.fit(X, y, params)
+                self.indicators = self.combine_indicators(indicators)
             elif eval_method['method'] == 'split':
                 X_train, y_train, X_test, y_test = train_test_split(
                     X, y, test_size=eval_method['test_size'], random_state=self.RANDOM_SEED)
                 model = self.fit(X_train, y_train, params)
                 score = self.get_score(model, X_test, y_test)
+                self.indicators = self.calc_indicators(model, X_test, y_test)
 
             self.save_model(model)
             self.log_score(score)
-            self.calc_indicators(model, X_test, y_test)
+            # self.calc_indicators(model, X_test, y_test)
+            self.log_indicators()
             self.save_indicators()
             self.logger.info("complete training")
         except Exception as e:
@@ -208,13 +213,38 @@ class BaseEstimator(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def calc_indicators(self, model, X, y) -> None:
+    def calc_indicators(self, model, X, y) -> dict:
         """
         モデルの評価指標を算出するメソッド
         Args:
             model: 学習済みのモデルインスタンス
             X: 指標算出用の入力データ
             y: 指標算出用の教師データ
+        return
+            indicators: インジケーターを格納した辞書オブジェクト
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def log_indicators(self) -> None:
+        """
+        ログのために標準出力にモデルの評価指標を出力するメソッド
+        Args:
+            indicators: 指標の辞書を格納したリスト
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def combine_indicators(self, indicators: list) -> dict:
+        """
+        クロスバリデーションの場合に複数のモデルの評価指標を一つに集約するメソッド
+
+        基本的にはそれぞれの指標の値の平均を算出する
+
+        Args:
+            indicators: 指標の辞書を格納したリスト
+        return
+            集約（平均）した指標を格納した辞書
         """
         raise NotImplementedError()
 
