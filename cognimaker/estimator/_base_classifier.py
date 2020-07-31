@@ -40,17 +40,14 @@ class BaseClassifier(BaseEstimator):
         # 正解率
         accuracy = accuracy_score(y, y_pred)
         indicators["accuracy"] = accuracy
-        # self.logger.info("accuracy={:.4f};".format(accuracy))
 
         # 適合率
         precision = precision_score(y, y_pred)
         indicators["precision"] = precision
-        # self.logger.info("precision={:.4f};".format(precision))
 
         # 再現率
         recall = recall_score(y, y_pred)
         indicators["recall"] = recall
-        # self.logger.info("recall={:.4f};".format(recall))
 
         # 混同行列
         cm = confusion_matrix(y, y_pred)
@@ -60,13 +57,11 @@ class BaseClassifier(BaseEstimator):
             "FN": cm[1][0],
             "TP": cm[1][1]
         }
-        # self.logger.info("confusion_matrix \n {};".format(cm))
 
         # AUC（教師データに片方のラベルしか無い場合エラーになるので例外処理をいれる）
         try:
             auc = roc_auc_score(y, predict_proba)
             indicators["auc"] = auc
-            # self.logger.info("auc={:.4f};".format(auc))
         except Exception as e:
             indicators["auc"] = None
             self.logger.error(str(e))
