@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "cognimaker"
+version = "0.0.2"
+description = ""
+authors = ["Joseph Irwin <joseph@cognirobo.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.6.1"
+numpy = "^1.19.4"
+pandas = "^1.1.5"
+scikit-learn = "^0.23.2"
+boto3 = "^1.16.32"
+pyspark = "^3.0.1"
+Flask = "^1.1.2"
+gevent = "^20.9.0"
+gunicorn = "^20.0.4"
+lenskit = "^0.11.1"
+dataclasses = {version = "^0.8", python = ">=3.6,<3.7"}
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.1.2"
+mypy = "^0.790"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

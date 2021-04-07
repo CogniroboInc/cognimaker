@@ -20,7 +20,7 @@ class BasePreprocessor(ABC):
 
     @staticmethod
     def _is_s3_path(path: str):
-        return path.startswith('s3://')
+        return path.startswith("s3://")
 
     @staticmethod
     def _parse_s3_file_path(s3_file_path):
@@ -29,27 +29,31 @@ class BasePreprocessor(ABC):
         :param s3_path:
         :return bucket(str), key(str)
         """
-        bucket = s3_file_path.split('//')[1].split('/')[0]
-        key = s3_file_path.split(f's3://{bucket}/')[1]
+        bucket = s3_file_path.split("//")[1].split("/")[0]
+        key = s3_file_path.split(f"s3://{bucket}/")[1]
         return bucket, key
 
     @staticmethod
     def _load_pickle(path):
         if BasePreprocessor._is_s3_path(path):
             bucket, key = BasePreprocessor._parse_s3_file_path(path)
-            s3 = boto3.resource('s3')
+            s3 = boto3.resource("s3")
             response = s3.Object(bucket, key).get()
-            obj = pickle.loads(response['Body'].read())
+            obj = pickle.loads(response["Body"].read())
             return obj
         else:
-            with open(path, mode='rb') as f:
+            with open(path, mode="rb") as f:
                 obj = pickle.load(f)
                 return obj
 
     def __init__(
-        self, input_path: str, output_path: str, pickle_path: str,
+        self,
+        input_path: str,
+        output_path: str,
+        pickle_path: str,
         categorical_columns: list = [],
-        purpose: str = 'train', load_pickle_path: str = None
+        purpose: str = "train",
+        load_pickle_path: str = None,
     ):
         """
         param
@@ -61,13 +65,13 @@ class BasePreprocessor(ABC):
             categorical_columns: カテゴリ値のカラムのリスト
         """
         if purpose not in ["train", "predict", "fine_tune"]:
-            self.__logger.error('invalid purpose')
-            raise ValueError('invalid purpose')
+            self.__logger.error("invalid purpose")
+            raise ValueError("invalid purpose")
 
-        self.process_id = os.environ.get('PROCESS_ID', 'xxxxxxxx')
+        self.process_id = os.environ.get("PROCESS_ID", "xxxxxxxx")
         self.categorical_columns = categorical_columns
         # 前処理結果として出力するカラム
-        self.output_columns = []
+        self.output_columns: list = []
         self.purpose = purpose
         self.input_path = input_path
         self.output_path = output_path
@@ -80,16 +84,16 @@ class BasePreprocessor(ABC):
         if purpose in ["predict", "fine_tune"]:
             obj = BasePreprocessor._load_pickle(load_pickle_path)
             self.encoder_dict = obj.encoder_dict
-            if hasattr(obj, 'category_value_dict'):
+            if hasattr(obj, "category_value_dict"):
                 self.category_value_dict = obj.category_value_dict
 
     def _to_pickle(self):
         if BasePreprocessor._is_s3_path(self.pickle_path):
             bucket, key = BasePreprocessor._parse_s3_file_path(self.pickle_path)
-            s3 = boto3.resource('s3')
+            s3 = boto3.resource("s3")
             s3.Object(bucket, key).put(Body=pickle.dumps(self))
         else:
-            with open(self.pickle_path, mode='wb') as f:
+            with open(self.pickle_path, mode="wb") as f:
                 pickle.dump(self, f)
 
     def _load_data(self):
@@ -102,12 +106,14 @@ class BasePreprocessor(ABC):
         """
         spark_context = SparkContext.getOrCreate()
         sql_context = SQLContext(spark_context)
-        spark_data_frame = sql_context.read.format('com.databricks.spark.csv') \
-            .option('header', 'true') \
-            .option('inferSchema', 'true') \
+        spark_data_frame = (
+            sql_context.read.format("com.databricks.spark.csv")
+            .option("header", "true")
+            .option("inferSchema", "true")
             .load(self.input_path)
+        )
 
-        if self.purpose == 'train':
+        if self.purpose == "train":
             self._set_category_value_dict(spark_data_frame)
         else:
             spark_data_frame = self._filter(spark_data_frame)
@@ -124,8 +130,9 @@ class BasePreprocessor(ABC):
             # categorical_columnsにはモデルが受け入れるカラムのリストを入れるので、
             # spark_dfに含まれているカラムのみdictに入れる。
             if column in spark_df.columns:
-                self.category_value_dict[column] = \
+                self.category_value_dict[column] = (
                     spark_df.select(column).distinct().rdd.map(lambda r: r[0]).collect()
+                )
 
     def _filter(self, spark_df):
         """
@@ -140,10 +147,14 @@ class BasePreprocessor(ABC):
         if self.category_value_dict:
             not_train_values_dict = {}
             for k, v in self.category_value_dict.items():
-                not_train_values_dict[k] = set(spark_df.select(k).distinct().rdd.map(lambda r: r[0]).collect()) - set(v)
+                not_train_values_dict[k] = set(
+                    spark_df.select(k).distinct().rdd.map(lambda r: r[0]).collect()
+                ) - set(v)
                 if not_train_values_dict[k]:
                     self.__logger.warning(
-                        "カラム：{0} に学習時にないカテゴリ：{1} が含まれています。".format(k, not_train_values_dict[k])
+                        "カラム：{0} に学習時にないカテゴリ：{1} が含まれています。".format(
+                            k, not_train_values_dict[k]
+                        )
                     )
             # フィルタ前のレコード数を記録しておき、除外されたレコード数をカウントする。
             count_before = spark_df.count()
@@ -190,11 +201,15 @@ class BasePreprocessor(ABC):
         if BasePreprocessor._is_s3_path(self.output_path):
             buffer = StringIO()
             pandas_df[self.output_columns].to_csv(buffer, index=False, header=header)
-            output_bucket, output_key = BasePreprocessor._parse_s3_file_path(self.output_path)
-            s3 = boto3.resource('s3')
+            output_bucket, output_key = BasePreprocessor._parse_s3_file_path(
+                self.output_path
+            )
+            s3 = boto3.resource("s3")
             s3.Object(output_bucket, output_key).put(Body=buffer.getvalue())
         else:
-            pandas_df[self.output_columns].to_csv(self.output_path, index=False, header=header)
+            pandas_df[self.output_columns].to_csv(
+                self.output_path, index=False, header=header
+            )
 
     def preprocess(self):
         """
@@ -233,7 +248,7 @@ class BasePreprocessor(ABC):
         return
             df: OneHotEncodingを行った結果をカラムに追加したpandas.DataFrame
         """
-        if self.purpose == 'train':
+        if self.purpose == "train":
             le = LabelEncoder()
             labels = le.fit_transform(df[column])
 
@@ -241,11 +256,11 @@ class BasePreprocessor(ABC):
             encoded = ohe.fit_transform(labels.reshape(-1, 1)).astype(int)
 
             self.encoder_dict[column] = {}
-            self.encoder_dict[column]['label_encoder'] = le
-            self.encoder_dict[column]['one_hot_encoder'] = ohe
+            self.encoder_dict[column]["label_encoder"] = le
+            self.encoder_dict[column]["one_hot_encoder"] = ohe
         else:
-            le = self.encoder_dict[column]['label_encoder']
-            ohe = self.encoder_dict[column]['one_hot_encoder']
+            le = self.encoder_dict[column]["label_encoder"]
+            ohe = self.encoder_dict[column]["one_hot_encoder"]
 
             labels = le.transform(df[column])
             encoded = ohe.transform(labels.reshape(-1, 1)).astype(int)
@@ -253,10 +268,7 @@ class BasePreprocessor(ABC):
         names = [(column + "-") + str(s) for s in le.classes_]
 
         one_hot_df = pd.DataFrame(
-            index=df.index,
-            columns=names,
-            data=encoded.toarray(),
-            dtype=int
+            index=df.index, columns=names, data=encoded.toarray(), dtype=int
         )
         df = pd.concat([df, one_hot_df], axis=1)
         self.output_columns.extend(names)
@@ -272,15 +284,15 @@ class BasePreprocessor(ABC):
         return
             df: LabelEncodingを行った結果をカラムに追加したpandas.DataFrame
         """
-        encode_column_name = column + '_label'
+        encode_column_name = column + "_label"
 
-        if self.purpose == 'train':
+        if self.purpose == "train":
             le = LabelEncoder()
             df[encode_column_name] = le.fit_transform(df[column])
             self.encoder_dict[encode_column_name] = {}
-            self.encoder_dict[encode_column_name]['label_encoder'] = le
+            self.encoder_dict[encode_column_name]["label_encoder"] = le
         else:
-            le = self.encoder_dict[encode_column_name]['label_encoder']
+            le = self.encoder_dict[encode_column_name]["label_encoder"]
             df[encode_column_name] = le.transform(df[column])
 
         self.output_columns.append(encode_column_name)
@@ -295,14 +307,14 @@ class BasePreprocessor(ABC):
         return
             df: FrequencyEncodingを行った結果をカラムに追加したpandas.DataFrame
         """
-        encode_column_name = column + '_freq'
+        encode_column_name = column + "_freq"
 
-        if self.purpose == 'train':
+        if self.purpose == "train":
             freq = df[column].value_counts()
             self.encoder_dict[encode_column_name] = {}
-            self.encoder_dict[encode_column_name]['freq'] = freq
+            self.encoder_dict[encode_column_name]["freq"] = freq
         else:
-            freq = self.encoder_dict[encode_column_name]['freq']
+            freq = self.encoder_dict[encode_column_name]["freq"]
 
         df[encode_column_name] = df[column].map(freq)
 
@@ -310,12 +322,7 @@ class BasePreprocessor(ABC):
         return df
 
     def target_encoding(
-        self,
-        df,
-        column,
-        target_column=None,
-        random_state=0,
-        n_splits=4
+        self, df, column, target_column=None, random_state=0, n_splits=4
     ) -> pd.DataFrame:
         """
         指定したカラムに対して、TargetEncodingを行うメソッド
@@ -328,18 +335,14 @@ class BasePreprocessor(ABC):
         return
             df: TargetEncodingを行った結果をカラムに追加したpandas.DataFrame
         """
-        encode_column_name = column + '_target_encode'
+        encode_column_name = column + "_target_encode"
 
-        if self.purpose == 'train':
+        if self.purpose == "train":
             # 学習データの変換後の値を格納する配列を準備
             tmp = np.repeat(np.nan, df.shape[0])
 
             # 学習データを分割
-            kf = KFold(
-                n_splits=n_splits,
-                shuffle=True,
-                random_state=random_state
-            )
+            kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
             for idx_1, idx_2 in kf.split(df):
                 # out-of-foldで各カテゴリにおける目的変数の平均を計算
                 target_mean = df.iloc[idx_1].groupby(column)[target_column].mean()
@@ -351,9 +354,9 @@ class BasePreprocessor(ABC):
 
             target_mean = df.groupby(column)[target_column].mean()
             self.encoder_dict[encode_column_name] = {}
-            self.encoder_dict[encode_column_name]['target_mean'] = target_mean
+            self.encoder_dict[encode_column_name]["target_mean"] = target_mean
         else:
-            target_mean = self.encoder_dict[encode_column_name]['target_mean']
+            target_mean = self.encoder_dict[encode_column_name]["target_mean"]
             df[encode_column_name] = df[column].map(target_mean)
 
         self.output_columns.append(encode_column_name)
