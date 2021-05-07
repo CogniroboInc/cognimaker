@@ -11,6 +11,7 @@ twine = "*"
 sphinx = "*"
 pyyaml = "*"
 flake8 = "*"
+autopep8 = "*"
 
 [packages]
 boto3 = "*"
