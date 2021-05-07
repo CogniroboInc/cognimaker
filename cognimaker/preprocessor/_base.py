@@ -85,7 +85,8 @@ class BasePreprocessor(ABC):
 
     def _to_pickle(self):
         if BasePreprocessor._is_s3_path(self.pickle_path):
-            bucket, key = BasePreprocessor._parse_s3_file_path(self.pickle_path)
+            bucket, key = BasePreprocessor._parse_s3_file_path(
+                self.pickle_path)
             s3 = boto3.resource('s3')
             s3.Object(bucket, key).put(Body=pickle.dumps(self))
         else:
@@ -102,7 +103,8 @@ class BasePreprocessor(ABC):
         """
         spark_context = SparkContext.getOrCreate()
         sql_context = SQLContext(spark_context)
-        spark_data_frame = sql_context.read.format('com.databricks.spark.csv') \
+        spark_data_frame = sql_context.read \
+            .format('com.databricks.spark.csv') \
             .option('header', 'true') \
             .option('inferSchema', 'true') \
             .load(self.input_path)
@@ -125,7 +127,8 @@ class BasePreprocessor(ABC):
             # spark_dfに含まれているカラムのみdictに入れる。
             if column in spark_df.columns:
                 self.category_value_dict[column] = \
-                    spark_df.select(column).distinct().rdd.map(lambda r: r[0]).collect()
+                    spark_df.select(column).distinct().rdd.map(
+                        lambda r: r[0]).collect()
 
     def _filter(self, spark_df):
         """
@@ -140,10 +143,12 @@ class BasePreprocessor(ABC):
         if self.category_value_dict:
             not_train_values_dict = {}
             for k, v in self.category_value_dict.items():
-                not_train_values_dict[k] = set(spark_df.select(k).distinct().rdd.map(lambda r: r[0]).collect()) - set(v)
+                not_train_values_dict[k] = set(spark_df.select(
+                    k).distinct().rdd.map(lambda r: r[0]).collect()) - set(v)
                 if not_train_values_dict[k]:
                     self.__logger.warning(
-                        "カラム：{0} に学習時にないカテゴリ：{1} が含まれています。".format(k, not_train_values_dict[k])
+                        "カラム：{0} に学習時にないカテゴリ：{1} が含まれています。".format(
+                            k, not_train_values_dict[k])
                     )
             # フィルタ前のレコード数を記録しておき、除外されたレコード数をカウントする。
             count_before = spark_df.count()
@@ -189,12 +194,15 @@ class BasePreprocessor(ABC):
             header = True
         if BasePreprocessor._is_s3_path(self.output_path):
             buffer = StringIO()
-            pandas_df[self.output_columns].to_csv(buffer, index=False, header=header)
-            output_bucket, output_key = BasePreprocessor._parse_s3_file_path(self.output_path)
+            pandas_df[self.output_columns].to_csv(
+                buffer, index=False, header=header)
+            output_bucket, output_key = BasePreprocessor._parse_s3_file_path(
+                self.output_path)
             s3 = boto3.resource('s3')
             s3.Object(output_bucket, output_key).put(Body=buffer.getvalue())
         else:
-            pandas_df[self.output_columns].to_csv(self.output_path, index=False, header=header)
+            pandas_df[self.output_columns].to_csv(
+                self.output_path, index=False, header=header)
 
     def preprocess(self):
         """
@@ -342,7 +350,8 @@ class BasePreprocessor(ABC):
             )
             for idx_1, idx_2 in kf.split(df):
                 # out-of-foldで各カテゴリにおける目的変数の平均を計算
-                target_mean = df.iloc[idx_1].groupby(column)[target_column].mean()
+                target_mean = df.iloc[idx_1].groupby(
+                    column)[target_column].mean()
                 # 変換後の値を一次配列に格納
                 tmp[idx_2] = df[column].iloc[idx_2].map(target_mean)
 

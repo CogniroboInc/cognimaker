@@ -1,4 +1,3 @@
-import numpy as np
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -6,7 +5,6 @@ from sklearn.metrics import (
     confusion_matrix,
     roc_auc_score,
     roc_curve,
-    f1_score
 )
 from abc import abstractmethod
 
@@ -17,6 +15,7 @@ class BaseClassifier(BaseEstimator):
     """
     クラス分類モデル（２値分類）の基底クラス
     """
+
     def calc_indicators(self, model, X, y):
         """
         以下の指標を算出し、self.indicatorsに格納する
@@ -65,8 +64,8 @@ class BaseClassifier(BaseEstimator):
             fpr, tpr, thresholds = roc_curve(y, predict_proba)
             # ROC曲線は、fprを横軸、tprを縦軸にプロットしたもの
             self.indicators["roc"] = {
-                "fpr": fpr, #偽陽性率
-                "tpr": tpr #真陽性率
+                "fpr": fpr,  # 偽陽性率
+                "tpr": tpr  # 真陽性率
             }
         except Exception as e:
             self.indicators["roc"] = {}
@@ -95,4 +94,3 @@ class BaseClassifier(BaseEstimator):
             予測結果の一次元配列（予測ラベルのリスト）
         """
         raise NotImplementedError()
-

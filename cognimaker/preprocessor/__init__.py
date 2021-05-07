@@ -1,1 +1,1 @@
-from ._base import BasePreprocessor
+from ._base import BasePreprocessor  # noqa

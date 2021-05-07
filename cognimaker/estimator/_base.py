@@ -4,16 +4,20 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from abc import ABC, abstractmethod
-from ..util import get_logger, NumpyEncoder
+from ..util import NumpyEncoder
 
 
 class BaseEstimator(ABC):
 
     INDICATOR_FILE = 'indicator.json'
-    RANDOM_SEED = 592 #Cogni
+    RANDOM_SEED = 592  # Cogni
     SCORE_FORMAT = "MODEL_SCORE={};"
 
-    def __init__(self, input_dir: str, output_dir: str, param_path: str = None, pretrain_model_dir: str = None):
+    def __init__(self,
+                 input_dir: str,
+                 output_dir: str,
+                 param_path: str = None,
+                 pretrain_model_dir: str = None):
         """
         param
             input_dir: 学習データの保存先ディレクトリのパス
@@ -25,15 +29,7 @@ class BaseEstimator(ABC):
         self.param_path = param_path
         self.output_dir = output_dir
         self.pretrain_model_dir = pretrain_model_dir
-        self.process_id = self._get_process_id()
-        self.logger = get_logger(self.__class__.__name__, self.process_id)
         self.indicators = {}
-
-    def _get_process_id(self):
-        with open(self.param_path, 'r') as tc:
-            params = json.load(tc)
-        process_id = params.get('process_id', 'xxxxxxxx')
-        return process_id
 
     def train(self) -> None:
         """
@@ -81,15 +77,15 @@ class BaseEstimator(ABC):
             X: 学習用の特徴量データ（pandas.DataFrame）
             y: 学習用の教師データ（pandas.Series）
         """
-        # Take the set of files and read them all into a single pandas dataframe
-        input_files = [os.path.join(self.input_dir, file) for file in os.listdir(self.input_dir)]
+        # Take the set of files and read them all into a single pandas dataframe  # noqa
+        input_files = [os.path.join(self.input_dir, file)
+                       for file in os.listdir(self.input_dir)]
         if len(input_files) == 0:
             raise ValueError(
-                (
-                    'There are no files in {}.\n'
-                    'the data specification in S3 was incorrectly specified or\n'
-                    'the role specified does not have permission to access the data.'
-                ).format(self.input_dir)
+                f'There are no files in {self.input_dir}.\n'
+                'the data specification in S3 was incorrectly specified or\n'
+                'the role specified does not have permission '
+                'to access the data.'
             )
         raw_data = [pd.read_csv(file, header=0) for file in input_files]
         data = pd.concat(raw_data)
@@ -184,5 +180,7 @@ class BaseEstimator(ABC):
         モデルの評価指標をJSON形式で出力するメソッド
         output_dirで指定したディレクトリに保存する
         """
-        with open(os.path.join(self.output_dir, self.INDICATOR_FILE), 'w') as f:
+        path = os.path.join(self.output_dir, self.INDICATOR_FILE)
+
+        with open(path, 'w') as f:
             json.dump(self.indicators, f, cls=NumpyEncoder, indent=2)
